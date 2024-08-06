@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -16,9 +17,12 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.Vector;
 
 import net.kyori.adventure.text.Component;
 import net.md_5.bungee.api.ChatColor;
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.TextComponent;
 import net.megavex.scoreboardlibrary.api.ScoreboardLibrary;
 import net.megavex.scoreboardlibrary.api.exception.NoPacketAdapterAvailableException;
 import net.megavex.scoreboardlibrary.api.noop.NoopScoreboardLibrary;
@@ -31,7 +35,7 @@ public class Edge extends JavaPlugin {
   private static Edge instance;
   private EdgeConfig config;
   private ScoreboardLibrary scoreboard;
-  private Map<UUID, PlayerSidebar> sidebars = new HashMap();
+  private Map<UUID, EdgeSidebar> sidebars = new HashMap();
 
   @Override
   public void onEnable() {
@@ -40,6 +44,7 @@ public class Edge extends JavaPlugin {
     this.loadConfig();
     this.setupScoreboard();
     this.getServer().getPluginManager().registerEvents(new SidebarListener(), this);
+    this.getServer().getScheduler().runTaskTimer(instance, new TargetEntityDistanceActionbarTask(), 0, 20);
   }
 
   @Override
@@ -61,13 +66,13 @@ public class Edge extends JavaPlugin {
     }
   }
 
-  class PlayerSidebar {
+  class EdgeSidebar {
     private Player player;
     private Sidebar sidebar;
     private ComponentSidebarLayout layout;
     private BukkitTask tickTask;
 
-    PlayerSidebar(Player player) {
+    EdgeSidebar(Player player) {
       this.player = player;
     }
 
@@ -148,7 +153,7 @@ public class Edge extends JavaPlugin {
   class SidebarListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-      PlayerSidebar sidebar = new PlayerSidebar(event.getPlayer());
+      EdgeSidebar sidebar = new EdgeSidebar(event.getPlayer());
       sidebar.setup();
       sidebars.put(event.getPlayer().getUniqueId(), sidebar);
     }
@@ -160,15 +165,38 @@ public class Edge extends JavaPlugin {
     }
   }
 
+  class TargetEntityDistanceActionbarTask implements Runnable {
+   
+    @Override
+    public void run() {
+      for (Player player : getServer().getOnlinePlayers()){
+        Entity target = Utils.getTargetEntity(player);
+
+        if (target == null) {
+          return;
+        }
+
+        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, player.getUniqueId(), new TextComponent(ChatColor.translateAlternateColorCodes('&', config.getActionbarSettings().getTargetEntityDistanceSettings().getFormat()
+          .replace("{TARGET}", target.getType().getEntityClass().getSimpleName()).replace("{DISTANCE}", "" + (Math.floor(player.getLocation().distance(target.getLocation()) * 100)) / 100))));
+      }
+    }
+  }
+
   class EdgeConfig {
     private SidebarSettings sidebarSettings;
+    private ActionbarSettings actionbarSettings;
 
     EdgeConfig(YamlConfiguration yaml) {
       this.sidebarSettings = new SidebarSettings(yaml);
+      this.actionbarSettings = new ActionbarSettings(yaml);
     }
 
     public SidebarSettings getSidebarSettings() {
       return this.sidebarSettings;
+    }
+
+    public ActionbarSettings getActionbarSettings() {
+      return this.actionbarSettings;
     }
 
     class SidebarSettings {
@@ -209,6 +237,35 @@ public class Edge extends JavaPlugin {
 
         public String getTimePattern() {
           return this.timePattern;
+        }
+      }
+    }
+
+    class ActionbarSettings {
+      private TargetEntityDistanceSettings targetEntityDistanceSettings;
+
+      ActionbarSettings(YamlConfiguration yaml) {
+        this.targetEntityDistanceSettings = new TargetEntityDistanceSettings(yaml);
+      }
+
+      public TargetEntityDistanceSettings getTargetEntityDistanceSettings() {
+        return this.targetEntityDistanceSettings;
+      }
+
+      class TargetEntityDistanceSettings {
+        private boolean isEnabled;
+        private String format;
+        TargetEntityDistanceSettings(YamlConfiguration yaml) {
+          this.isEnabled = yaml.getBoolean("actionbar.target_entity_distance.enabled");
+          this.format = yaml.getString("actionbar.target_entity_distance.format");
+        }
+  
+        public boolean isEnabled() {
+          return this.isEnabled;
+        }
+  
+        public String getFormat() {
+          return this.format;
         }
       }
     }
@@ -259,6 +316,37 @@ public class Edge extends JavaPlugin {
         e.printStackTrace();
       }
       return recentTps;
+    }
+
+    public static Player getTargetPlayer(final Player player) {
+      return getTarget(player, player.getWorld().getPlayers());
+    }
+
+    public static Entity getTargetEntity(final Entity entity) {
+        return getTarget(entity, entity.getWorld().getEntities());
+    }
+
+    public static <T extends Entity> T getTarget(final Entity entity,
+            final Iterable<T> entities) {
+        if (entity == null)
+            return null;
+        T target = null;
+        final double threshold = 1;
+        for (final T other : entities) {
+            final Vector n = other.getLocation().toVector()
+                    .subtract(entity.getLocation().toVector());
+            if (entity.getLocation().getDirection().normalize().crossProduct(n)
+                    .lengthSquared() < threshold
+                    && n.normalize().dot(
+                            entity.getLocation().getDirection().normalize()) >= 0) {
+                if (target == null
+                        || target.getLocation().distanceSquared(
+                                entity.getLocation()) > other.getLocation()
+                                .distanceSquared(entity.getLocation()))
+                    target = other;
+            }
+        }
+        return target;
     }
   }
 }

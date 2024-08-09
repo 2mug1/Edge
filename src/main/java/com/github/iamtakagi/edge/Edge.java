@@ -1,13 +1,10 @@
 package com.github.iamtakagi.edge;
 
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 import org.bukkit.Bukkit;
+import org.bukkit.WeatherType;
+import org.bukkit.World;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -30,6 +27,8 @@ import net.megavex.scoreboardlibrary.api.sidebar.Sidebar;
 import net.megavex.scoreboardlibrary.api.sidebar.component.ComponentSidebarLayout;
 import net.megavex.scoreboardlibrary.api.sidebar.component.SidebarComponent;
 
+import java.util.*;
+
 public class Edge extends JavaPlugin {
 
   private static Edge instance;
@@ -44,13 +43,21 @@ public class Edge extends JavaPlugin {
     this.loadConfig();
     this.setupScoreboard();
     this.getServer().getPluginManager().registerEvents(new SidebarListener(), this);
-    this.getServer().getScheduler().runTaskTimer(instance, new TargetEntityDistanceActionbarTask(), 0, 20);
+    this.getServer().getScheduler().runTaskTimer(instance, new TargetEntityDistanceActionbarTask(), 0, 1);
   }
 
   @Override
   public void onDisable() {
     this.saveDefaultConfig();
     scoreboard.close();
+  }
+
+  public static Edge getInstance() {
+    return instance;
+  }
+
+  public EdgeConfig getEdgeConfig() {
+    return config;
   }
 
   private void loadConfig() {
@@ -120,6 +127,22 @@ public class Edge extends JavaPlugin {
         raw = raw.replace("{DIRECTION}", Utils.getCardinalDirection(player));
       }
 
+      if (raw.contains("{WORLD}")) {
+        raw = raw.replace("{WORLD}", player.getWorld().getName());
+      }
+
+      if (raw.contains("{WORLD_DATE}")) {
+        raw = raw.replace("{WORLD_DATE}", TicksFormatter.formatDate(player.getWorld().getFullTime()));
+      }
+
+      if (raw.contains("{WORLD_TIME}")) {
+        raw = raw.replace("{WORLD_TIME}", TicksFormatter.formatTime(player.getWorld().getTime()));
+      }
+
+      if (raw.contains("{WEATHER}")) {
+        raw = raw.replace("{WEATHER}", Utils.getWorldWeather(player.getWorld()));
+      }
+
       if (raw.contains("{TPS}")) {
         double[] recetTps = Utils.getRecentTps();
         double avgTps = (recetTps[0] + recetTps[1] + recetTps[2]) / 3;
@@ -139,7 +162,8 @@ public class Edge extends JavaPlugin {
       }
 
       if (raw.contains("{USAGE_RAM}")) {
-        raw = raw.replace("{USAGE_RAM}", String.format("%,d", (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024 / 1024));
+        raw = raw.replace("{USAGE_RAM}", String.format("%,d",
+            (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024 / 1024));
       }
 
       if (raw.contains("{TOTAL_RAM}")) {
@@ -166,18 +190,21 @@ public class Edge extends JavaPlugin {
   }
 
   class TargetEntityDistanceActionbarTask implements Runnable {
-   
+
     @Override
     public void run() {
-      for (Player player : getServer().getOnlinePlayers()){
+      for (Player player : getServer().getOnlinePlayers()) {
         Entity target = Utils.getTargetEntity(player);
 
         if (target == null) {
           return;
         }
 
-        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, player.getUniqueId(), new TextComponent(ChatColor.translateAlternateColorCodes('&', config.getActionbarSettings().getTargetEntityDistanceSettings().getFormat()
-          .replace("{TARGET}", target.getType().getEntityClass().getSimpleName()).replace("{DISTANCE}", "" + (Math.floor(player.getLocation().distance(target.getLocation()) * 100)) / 100))));
+        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, player.getUniqueId(),
+            new TextComponent(ChatColor.translateAlternateColorCodes('&',
+                config.getActionbarSettings().getTargetEntityDistanceSettings().getFormat()
+                    .replace("{TARGET}", target.getType().getEntityClass().getSimpleName()).replace("{DISTANCE}",
+                        "" + (Math.floor(player.getLocation().distance(target.getLocation()) * 100)) / 100))));
       }
     }
   }
@@ -225,10 +252,14 @@ public class Edge extends JavaPlugin {
       class PatternSettings {
         private String datePattern;
         private String timePattern;
+        private String worldDatePattern;
+        private String worldTimePattern;
 
         PatternSettings(YamlConfiguration yaml) {
           this.datePattern = yaml.getString("sidebar.pattern.date");
           this.timePattern = yaml.getString("sidebar.pattern.time");
+          this.worldDatePattern = yaml.getString("sidebar.pattern.world_date");
+          this.worldTimePattern = yaml.getString("sidebar.pattern.world_time");
         }
 
         public String getDatePattern() {
@@ -237,6 +268,14 @@ public class Edge extends JavaPlugin {
 
         public String getTimePattern() {
           return this.timePattern;
+        }
+
+        public String getWorldDatePattern() {
+          return this.worldDatePattern;
+        }
+
+        public String getWorldTimePattern() {
+          return this.worldTimePattern;
         }
       }
     }
@@ -255,98 +294,326 @@ public class Edge extends JavaPlugin {
       class TargetEntityDistanceSettings {
         private boolean isEnabled;
         private String format;
+
         TargetEntityDistanceSettings(YamlConfiguration yaml) {
           this.isEnabled = yaml.getBoolean("actionbar.target_entity_distance.enabled");
           this.format = yaml.getString("actionbar.target_entity_distance.format");
         }
-  
+
         public boolean isEnabled() {
           return this.isEnabled;
         }
-  
+
         public String getFormat() {
           return this.format;
         }
       }
     }
   }
+}
 
-  static class Utils {
-    static String getCardinalDirection(Player player) {
-      double rotation = (player.getLocation().getYaw() - 90.0F) % 360.0F;
-      if (rotation < 0.0D) {
-        rotation += 360.0D;
-      }
-      if ((0.0D <= rotation) && (rotation < 22.5D)) {
-        return "北";
-      }
-      if ((22.5D <= rotation) && (rotation < 67.5D)) {
-        return "北東";
-      }
-      if ((67.5D <= rotation) && (rotation < 112.5D)) {
-        return "東";
-      }
-      if ((112.5D <= rotation) && (rotation < 157.5D)) {
-        return "南東";
-      }
-      if ((157.5D <= rotation) && (rotation < 202.5D)) {
-        return "南";
-      }
-      if ((202.5D <= rotation) && (rotation < 247.5D)) {
-        return "南西";
-      }
-      if ((247.5D <= rotation) && (rotation < 292.5D)) {
-        return "西";
-      }
-      if ((292.5D <= rotation) && (rotation < 337.5D)) {
-        return "北西";
-      }
-      if ((337.5D <= rotation) && (rotation < 360.0D)) {
-        return "北";
-      }
+class Utils {
+  static String getCardinalDirection(Player player) {
+    double rotation = (player.getLocation().getYaw() - 90.0F) % 360.0F;
+    if (rotation < 0.0D) {
+      rotation += 360.0D;
+    }
+    if ((0.0D <= rotation) && (rotation < 22.5D)) {
+      return "北";
+    }
+    if ((22.5D <= rotation) && (rotation < 67.5D)) {
+      return "北東";
+    }
+    if ((67.5D <= rotation) && (rotation < 112.5D)) {
+      return "東";
+    }
+    if ((112.5D <= rotation) && (rotation < 157.5D)) {
+      return "南東";
+    }
+    if ((157.5D <= rotation) && (rotation < 202.5D)) {
+      return "南";
+    }
+    if ((202.5D <= rotation) && (rotation < 247.5D)) {
+      return "南西";
+    }
+    if ((247.5D <= rotation) && (rotation < 292.5D)) {
+      return "西";
+    }
+    if ((292.5D <= rotation) && (rotation < 337.5D)) {
+      return "北西";
+    }
+    if ((337.5D <= rotation) && (rotation < 360.0D)) {
+      return "北";
+    }
+    return null;
+  }
+
+  static double[] getRecentTps() {
+    double[] recentTps = null;
+    try {
+      Object server = Bukkit.getServer().getClass().getMethod("getServer").invoke(Bukkit.getServer());
+      recentTps = ((double[]) server.getClass().getField("recentTps").get(server));
+    } catch (ReflectiveOperationException e) {
+      e.printStackTrace();
+    }
+    return recentTps;
+  }
+
+  public static Player getTargetPlayer(final Player player) {
+    return getTarget(player, player.getWorld().getPlayers());
+  }
+
+  public static Entity getTargetEntity(final Entity entity) {
+    return getTarget(entity, entity.getWorld().getEntities());
+  }
+
+  public static <T extends Entity> T getTarget(final Entity entity,
+      final Iterable<T> entities) {
+    if (entity == null)
       return null;
-    }
-
-    static double[] getRecentTps() {
-      double[] recentTps = null;
-      try {
-        Object server = Bukkit.getServer().getClass().getMethod("getServer").invoke(Bukkit.getServer());
-        recentTps = ((double[]) server.getClass().getField("recentTps").get(server));
-      } catch (ReflectiveOperationException e) {
-        e.printStackTrace();
+    T target = null;
+    final double threshold = 1;
+    for (final T other : entities) {
+      final Vector n = other.getLocation().toVector()
+          .subtract(entity.getLocation().toVector());
+      if (entity.getLocation().getDirection().normalize().crossProduct(n)
+          .lengthSquared() < threshold
+          && n.normalize().dot(
+              entity.getLocation().getDirection().normalize()) >= 0) {
+        if (target == null
+            || target.getLocation().distanceSquared(
+                entity.getLocation()) > other.getLocation()
+                    .distanceSquared(entity.getLocation()))
+          target = other;
       }
-      return recentTps;
+    }
+    return target;
+  }
+
+  public static String getWorldWeather(World world) {
+    if (world.isClearWeather()) {
+      return "晴れ";
+    } else if (world.isThundering() && !world.isClearWeather()) {
+      return "雷雨";
+    } else if (!world.isClearWeather() && !world.isThundering()) {
+      return "雨";
+    }
+    return "不明";
+  }
+}
+
+class TicksFormatter {
+  public static final Map<String, Integer> nameToTicks = new LinkedHashMap<String, Integer>();
+  public static final Set<String> resetAliases = new HashSet<String>();
+  public static final int ticksAtMidnight = 18000;
+  public static final int ticksPerDay = 24000;
+  public static final int ticksPerHour = 1000;
+  public static final double ticksPerMinute = 1000d / 60d;
+  public static final double ticksPerSecond = 1000d / 60d / 60d;
+  private static final SimpleDateFormat dateSdf = new SimpleDateFormat(
+      Edge.getInstance().getEdgeConfig().getSidebarSettings().getPatternSettings().getWorldDatePattern());
+  private static final SimpleDateFormat timeSdf = new SimpleDateFormat(
+      Edge.getInstance().getEdgeConfig().getSidebarSettings().getPatternSettings().getWorldTimePattern());
+
+  static {
+    timeSdf.setTimeZone(TimeZone.getTimeZone(System.getenv("TZ")));
+
+    nameToTicks.put("sunrise", 23000);
+    nameToTicks.put("dawn", 23000);
+
+    nameToTicks.put("daystart", 0);
+    nameToTicks.put("day", 0);
+
+    nameToTicks.put("morning", 1000);
+
+    nameToTicks.put("midday", 6000);
+    nameToTicks.put("noon", 6000);
+
+    nameToTicks.put("afternoon", 9000);
+
+    nameToTicks.put("sunset", 12000);
+    nameToTicks.put("dusk", 12000);
+    nameToTicks.put("sundown", 12000);
+    nameToTicks.put("nightfall", 12000);
+
+    nameToTicks.put("nightstart", 14000);
+    nameToTicks.put("night", 14000);
+
+    nameToTicks.put("midnight", 18000);
+
+    resetAliases.add("reset");
+    resetAliases.add("normal");
+    resetAliases.add("default");
+  }
+
+  // ============================================
+  public static long parse(String desc) throws NumberFormatException {
+    desc = desc.toLowerCase(Locale.JAPAN).replaceAll("[^A-Za-z0-9:]", "");
+
+    try {
+      return parseTicks(desc);
+    } catch (NumberFormatException e) {
     }
 
-    public static Player getTargetPlayer(final Player player) {
-      return getTarget(player, player.getWorld().getPlayers());
+    try {
+      return parse24(desc);
+    } catch (NumberFormatException e) {
     }
 
-    public static Entity getTargetEntity(final Entity entity) {
-        return getTarget(entity, entity.getWorld().getEntities());
+    try {
+      return parse12(desc);
+    } catch (NumberFormatException e) {
     }
 
-    public static <T extends Entity> T getTarget(final Entity entity,
-            final Iterable<T> entities) {
-        if (entity == null)
-            return null;
-        T target = null;
-        final double threshold = 1;
-        for (final T other : entities) {
-            final Vector n = other.getLocation().toVector()
-                    .subtract(entity.getLocation().toVector());
-            if (entity.getLocation().getDirection().normalize().crossProduct(n)
-                    .lengthSquared() < threshold
-                    && n.normalize().dot(
-                            entity.getLocation().getDirection().normalize()) >= 0) {
-                if (target == null
-                        || target.getLocation().distanceSquared(
-                                entity.getLocation()) > other.getLocation()
-                                .distanceSquared(entity.getLocation()))
-                    target = other;
-            }
-        }
-        return target;
+    try {
+      return parseAlias(desc);
+    } catch (NumberFormatException e) {
     }
+
+    throw new NumberFormatException();
+  }
+
+  public static long parseTicks(String desc) throws NumberFormatException {
+    if (!desc.matches("^[0-9]+ti?c?k?s?$")) {
+      throw new NumberFormatException();
+    }
+
+    desc = desc.replaceAll("[^0-9]", "");
+
+    return Long.parseLong(desc) % 24000;
+  }
+
+  public static long parse24(String desc) throws NumberFormatException {
+    if (!desc.matches("^[0-9]{2}[^0-9]?[0-9]{2}$")) {
+      throw new NumberFormatException();
+    }
+
+    desc = desc.toLowerCase(Locale.JAPAN).replaceAll("[^0-9]", "");
+
+    if (desc.length() != 4) {
+      throw new NumberFormatException();
+    }
+
+    final int hours = Integer.parseInt(desc.substring(0, 2));
+    final int minutes = Integer.parseInt(desc.substring(2, 4));
+
+    return hoursMinutesToTicks(hours, minutes);
+  }
+
+  public static long parse12(String desc) throws NumberFormatException {
+    if (!desc.matches("^[0-9]{1,2}([^0-9]?[0-9]{2})?(pm|am)$")) {
+      throw new NumberFormatException();
+    }
+
+    int hours = 0;
+    int minutes = 0;
+
+    desc = desc.toLowerCase(Locale.JAPAN);
+    String parsetime = desc.replaceAll("[^0-9]", "");
+
+    if (parsetime.length() > 4) {
+      throw new NumberFormatException();
+    }
+
+    if (parsetime.length() == 4) {
+      hours += Integer.parseInt(parsetime.substring(0, 2));
+      minutes += Integer.parseInt(parsetime.substring(2, 4));
+    } else if (parsetime.length() == 3) {
+      hours += Integer.parseInt(parsetime.substring(0, 1));
+      minutes += Integer.parseInt(parsetime.substring(1, 3));
+    } else if (parsetime.length() == 2) {
+      hours += Integer.parseInt(parsetime.substring(0, 2));
+    } else if (parsetime.length() == 1) {
+      hours += Integer.parseInt(parsetime.substring(0, 1));
+    } else {
+      throw new NumberFormatException();
+    }
+
+    if (desc.endsWith("pm") && hours != 12) {
+      hours += 12;
+    }
+
+    if (desc.endsWith("am") && hours == 12) {
+      hours -= 12;
+    }
+
+    return hoursMinutesToTicks(hours, minutes);
+  }
+
+  public static long hoursMinutesToTicks(final int hours, final int minutes) {
+    long ret = ticksAtMidnight;
+    ret += (hours) * ticksPerHour;
+
+    ret += (minutes / 60.0) * ticksPerHour;
+
+    ret %= ticksPerDay;
+    return ret;
+  }
+
+  public static long parseAlias(final String desc) throws NumberFormatException {
+    final Integer ret = nameToTicks.get(desc);
+    if (ret == null) {
+      throw new NumberFormatException();
+    }
+
+    return ret;
+  }
+
+  public static boolean meansReset(final String desc) {
+    return resetAliases.contains(desc);
+  }
+
+  public static String formatTicks(final long ticks) {
+    return (ticks % ticksPerDay) + "ticks";
+  }
+
+  public static String formatTime(final long ticks) {
+    synchronized (timeSdf) {
+      return format(ticks, timeSdf);
+    }
+  }
+
+  public static String formatDate(final long ticks) {
+    synchronized (dateSdf) {
+      return format(ticks, dateSdf);
+    }
+  }
+
+  public static String format(final long ticks, final SimpleDateFormat format) {
+    final Date date = ticksToDate(ticks);
+    return format.format(date);
+  }
+
+  public static Date ticksToDate(long ticks) {
+    // Assume the server time starts at 0. It would start on a day.
+    // But we will simulate that the server started with 0 at midnight.
+    ticks = ticks - ticksAtMidnight + ticksPerDay;
+
+    // How many ingame days have passed since the server start?
+    final long days = ticks / ticksPerDay;
+    ticks -= days * ticksPerDay;
+
+    // How many hours on the last day?
+    final long hours = ticks / ticksPerHour;
+    ticks -= hours * ticksPerHour;
+
+    // How many minutes on the last day?
+    final long minutes = (long) Math.floor(ticks / ticksPerMinute);
+    final double dticks = ticks - minutes * ticksPerMinute;
+
+    // How many seconds on the last day?
+    final long seconds = (long) Math.floor(dticks / ticksPerSecond);
+
+    final Calendar cal = Calendar.getInstance(TimeZone.getTimeZone(System.getenv("TZ")), Locale.JAPAN);
+    cal.setLenient(true);
+
+    // And we set the time to 0! And append the time that passed!
+    cal.set(0, Calendar.JANUARY, 1, 0, 0, 0);
+    cal.add(Calendar.DAY_OF_YEAR, (int) days);
+    cal.add(Calendar.HOUR_OF_DAY, (int) hours);
+    cal.add(Calendar.MINUTE, (int) minutes);
+    cal.add(Calendar.SECOND, (int) seconds + 1); // To solve rounding errors.
+
+    return cal.getTime();
   }
 }

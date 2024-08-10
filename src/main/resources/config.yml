@@ -2,8 +2,8 @@ sidebar:
   title: "&a&lmc.iamtakagi.net"
   lines:
     - "&r{PING}ms"
-    - "&b❙ &r{WORLD}"
-    - "&b❙ &r{WORLD_DATE} {WORLD_TIME} ({WEATHER})"
+    - "&r{WORLD}"
+    - "&r{WORLD_DATE} {WORLD_TIME} ({WEATHER})"
     - "&r{X}, {Y}, {Z} ({DIRECTION})"
     - "&r{TPS}TPS"
     - "&r{USAGE_RAM} / {TOTAL_RAM} MB"

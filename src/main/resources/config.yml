@@ -14,7 +14,3 @@ sidebar:
     time: HH:mm:ss
     world_date: yyyy/MM/dd
     world_time: HH:mm
-actionbar:
-  target_entity_distance:
-    enabled: true
-    format: "&b{TARGET} - {DISTANCE}m"

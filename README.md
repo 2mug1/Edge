@@ -13,8 +13,4 @@ sidebar:
   pattern:
     date: yyyy/MM/dd
     time: HH:mm:ss
-actionbar:
-  target_entity_distance:
-    enabled: true
-    format: "&b{TARGET} - {DISTANCE}m"
 ```

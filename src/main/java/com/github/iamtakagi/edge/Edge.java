@@ -179,7 +179,6 @@ public class Edge extends JavaPlugin {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-      sidebars.get(event.getPlayer().getUniqueId()).tickTask.cancel();
       sidebars.remove(event.getPlayer().getUniqueId());
     }
   }

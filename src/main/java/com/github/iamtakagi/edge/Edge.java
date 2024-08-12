@@ -4,6 +4,7 @@ import java.text.SimpleDateFormat;
 
 import org.bukkit.Bukkit;
 import org.bukkit.World;
+import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -118,7 +119,7 @@ public class Edge extends JavaPlugin {
       }
 
       if (raw.contains("{DIRECTION}")) {
-        raw = raw.replace("{DIRECTION}", Utils.getCardinalDirection(player));
+        raw = raw.replace("{DIRECTION}", Utils.getDirectionByFace(player.getFacing()));
       }
 
       if (raw.contains("{WORLD}")) {
@@ -251,39 +252,49 @@ public class Edge extends JavaPlugin {
 }
 
 class Utils {
-  static String getCardinalDirection(Player player) {
-    double rotation = (player.getLocation().getYaw() - 90.0F) % 360.0F;
-    if (rotation < 0.0D) {
-      rotation += 360.0D;
+  static String getDirectionByFace(BlockFace face) {
+    switch (face) {
+      case NORTH:
+        return "北";
+      case EAST:
+        return "東";
+      case SOUTH:
+        return "南";
+      case WEST:
+        return "西";
+      case UP:
+        return "上";
+      case DOWN:
+        return "下";
+      case NORTH_EAST:
+        return "北東";
+      case NORTH_WEST:
+        return "北西";
+      case SOUTH_EAST:
+        return "南東";
+      case SOUTH_WEST:
+        return "南西";
+      case WEST_NORTH_WEST:
+        return "西北西";
+      case NORTH_NORTH_WEST:
+        return "北北西";
+      case NORTH_NORTH_EAST:
+        return "北北東";
+      case EAST_NORTH_EAST:
+        return "東北東";
+      case EAST_SOUTH_EAST:
+        return "東南東";
+      case SOUTH_SOUTH_EAST:
+        return "南南東";
+      case SOUTH_SOUTH_WEST:
+        return "南南西";
+      case WEST_SOUTH_WEST:
+        return "西南西";
+      case SELF:
+        return "自分";
+      default:
+        return "不明";
     }
-    if ((0.0D <= rotation) && (rotation < 22.5D)) {
-      return "北";
-    }
-    if ((22.5D <= rotation) && (rotation < 67.5D)) {
-      return "北東";
-    }
-    if ((67.5D <= rotation) && (rotation < 112.5D)) {
-      return "東";
-    }
-    if ((112.5D <= rotation) && (rotation < 157.5D)) {
-      return "南東";
-    }
-    if ((157.5D <= rotation) && (rotation < 202.5D)) {
-      return "南";
-    }
-    if ((202.5D <= rotation) && (rotation < 247.5D)) {
-      return "南西";
-    }
-    if ((247.5D <= rotation) && (rotation < 292.5D)) {
-      return "西";
-    }
-    if ((292.5D <= rotation) && (rotation < 337.5D)) {
-      return "北西";
-    }
-    if ((337.5D <= rotation) && (rotation < 360.0D)) {
-      return "北";
-    }
-    return null;
   }
 
   static double[] getRecentTps() {
